@@ -593,6 +593,19 @@ static void l2c_csm_orig_w4_sec_comp(tL2C_CCB* p_ccb, tL2CEVT event, void* p_dat
       l2cu_release_ccb(p_ccb);
       break;
 
+    case L2CEVT_L2CAP_INFO_RSP:
+      /* INFO_RSP received while security is still pending (ORIG_W4_SEC_COMP).
+       * The LCB already processes the INFO_RSP at the link level and clears
+       * w4_info_rsp. When L2CEVT_SEC_COMP arrives, l2c_csm_orig_w4_sec_comp()
+       * already checks p_lcb->w4_info_rsp before sending the connect request,
+       * so no action is needed here. Silently ignore to avoid spurious errors.
+       */
+      log::debug(
+          "INFO_RSP received in ORIG_W4_SEC_COMP state for lcid=0x{:04x} psm={}; "
+          "security still pending, deferring connect request until SEC_COMP.",
+          p_ccb->local_cid, psm_to_text(p_ccb->p_rcb->psm));
+      break;
+
     default:
       log::error("Handling unexpected event:{}", l2c_csm_get_event_name(event));
   }
@@ -901,6 +914,19 @@ static void l2c_csm_w4_l2cap_connect_rsp(tL2C_CCB* p_ccb, tL2CEVT event, void* p
           (*disconnect_cfm)(local_cid, static_cast<uint16_t>(tL2CAP_CONN::L2CAP_CONN_NO_LINK));
         }
       }
+      break;
+
+    case L2CEVT_SEC_RE_SEND_CMD:
+      /* Security has already completed (we are in W4_L2CAP_CONNECT_RSP, meaning
+       * the connect request was already sent). This is a redundant resend command
+       * dispatched by the security manager due to accumulated pending requests
+       * across multiple connection attempts. Ignore it to prevent re-triggering
+       * security processing on a channel that is already past that stage.
+       */
+      log::debug(
+          "SEC_RE_SEND_CMD received in W4_L2CAP_CONNECT_RSP state for lcid=0x{:04x} psm={}; "
+          "security already completed, ignoring redundant resend request.",
+          p_ccb->local_cid, psm_to_text(p_ccb->p_rcb->psm));
       break;
 
     case L2CEVT_L2CA_DATA_WRITE: /* Upper layer data to send */

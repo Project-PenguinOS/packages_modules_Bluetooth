@@ -23,12 +23,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <vector>
 
 #include "audio_hal_interface/a2dp_encoding.h"
 #include "hardware/bt_av.h"
 #include "stack/include/a2dp_codec_api.h"
 #include "stack/include/a2dp_constants.h"
+#include "stack/include/a2dp_vendor.h"
 
 using namespace bluetooth;
 
@@ -52,6 +54,35 @@ A2dpCodecConfigExt::A2dpCodecConfigExt(btav_a2dp_codec_index_t codec_index, bool
   ota_codec_config_ = bluetooth::a2dp::MediaCodecCapabilities(codec_info);
 }
 
+int A2dpCodecConfigExt::getTrackBitRate() const {
+  log::info("codec={}, codec_id={}", name_,
+            bluetooth::a2dp::CodecIdToString(codec_id_));
+  if (codec_id_ == bluetooth::a2dp::CodecId::LDAC) {
+    int samplerate = A2DP_GetTrackSampleRate(ota_codec_config_.data());
+    int bitrate = 0;
+    switch (codec_config_.codec_specific_1) {
+      case 1000:
+        bitrate = (samplerate == 44100 || samplerate == 88200) ? 909000 : 990000;
+        break;
+      case 1001:
+        bitrate = (samplerate == 44100 || samplerate == 88200) ? 606000 : 660000;
+        break;
+      case 1002:
+        bitrate = (samplerate == 44100 || samplerate == 88200) ? 303000 : 330000;
+        break;
+      case 1003:
+      default:
+        bitrate = 0;  // ABR: no static bitrate, rate driven by controller.
+        break;
+    }
+    log::info("codec=LDAC: codec_specific_1={}, samplerate={}, returning bitrate={}",
+              codec_config_.codec_specific_1, samplerate, bitrate);
+    return bitrate;
+  }
+  log::info("codec={}: no static bitrate (offload/ABR), returning 0", name_);
+  return 0;
+}
+
 tA2DP_STATUS A2dpCodecConfigExt::setCodecConfig(const uint8_t* p_peer_codec_info,
                                                 bool /* is_capability */,
                                                 uint8_t* p_result_codec_config) {
@@ -69,9 +100,20 @@ tA2DP_STATUS A2dpCodecConfigExt::setCodecConfig(const uint8_t* p_peer_codec_info
           .capabilities = p_peer_codec_info,
   };
 
+  // Compute the codec bitrate hint in the stack (e.g. LDAC Developer-Options
+  // bit rate) so it can be forwarded to the audio HAL without codec-specific
+  // logic in the HAL.
+  auto user_preferences = codec_user_config_;
+  auto bitrate_range = A2DP_VendorGetBitRateRange(codec_id_, user_preferences.codec_specific_1,
+                                                  user_preferences.SampleRateHz());
+  if (bitrate_range.has_value()) {
+    user_preferences.min_bitrate = bitrate_range->min_bitrate;
+    user_preferences.max_bitrate = bitrate_range->max_bitrate;
+  }
+
   auto result = provider::get_a2dp_configuration(
           RawAddress::kEmpty, std::vector<provider::a2dp_remote_capabilities>{capabilities},
-          codec_user_config_, codec_id_, is_source_);
+          user_preferences, codec_id_, is_source_);
   if (!result.has_value()) {
     log::error("Failed to set a configuration for {}", name_);
     return AVDTP_UNSUPPORTED_CONFIGURATION;

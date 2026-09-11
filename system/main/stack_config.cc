@@ -68,6 +68,7 @@ const char* PTS_LE_DISABLE_ENCRYP = "PTS_LeDisableEncryp";
 const char* PTS_L2CAP_LE_INSUFF_ENC = "PTS_L2capLeInsuffEnc";
 const char* PTS_ENABLE_AUTHORIZATION_ENCR_DATA_KEY = "PTS_EnableAuthorizationEncrDataKey";
 const char* PTS_GATT_DISABLE_CL_CACHING_BIT_RESET = "PTS_GattDisableClCachingBitReset";
+const char* PTS_VAP_NOTIFY_CHARACTERISTICS = "PTS_VapNotifyCharacteristics";
 
 static std::unique_ptr<config_t> config;
 }  // namespace
@@ -276,6 +277,10 @@ static bool get_pts_gatt_disable_cl_caching_bit_reset(void) {
                          false);
 }
 
+static bool get_pts_vap_notify_characteristics(void) {
+  return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_VAP_NOTIFY_CHARACTERISTICS, false);
+}
+
 const stack_config_t interface = {get_pts_avrcp_test,
                                   get_pts_secure_only_mode,
                                   get_pts_conn_updates_disabled,
@@ -311,6 +316,7 @@ const stack_config_t interface = {get_pts_avrcp_test,
                                   get_pts_le_disable_encryp,
                                   get_pts_l2cap_le_insuff_enc,
                                   get_pts_enable_authorization_encr_data_key,
-                                  get_pts_gatt_disable_cl_caching_bit_reset};
+                                  get_pts_gatt_disable_cl_caching_bit_reset,
+                                  get_pts_vap_notify_characteristics};
 
 const stack_config_t* stack_config_get_interface(void) { return &interface; }

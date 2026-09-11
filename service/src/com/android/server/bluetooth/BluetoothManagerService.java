@@ -1726,9 +1726,17 @@ public class BluetoothManagerService {
         }
         Log.d(TAG, "bleTurningOnToOff: Sending request");
         if (mAdapter == null) {
-            // When Bluetooth was not yet bound, prevent binding to complete
-            Log.d(TAG, "bleTurningOnToOff: Cancel binding");
-            mContext.unbindService(mConnection);
+            // When Bluetooth was not yet bound, prevent binding to complete.
+            // Only call unbindService if bindToAdapter() was actually invoked (isBinding() is
+            // true). If the role grant is still pending, bindToAdapter() was never called and
+            // mConnection was never registered, so calling unbindService would throw
+            // IllegalArgumentException: Service not registered.
+            if (isBinding()) {
+                Log.d(TAG, "bleTurningOnToOff: Cancel binding");
+                mContext.unbindService(mConnection);
+            } else {
+                Log.d(TAG, "bleTurningOnToOff: Binding not yet started, nothing to unbind");
+            }
             if (!Flags.systemServerDirectSwitch()) {
                 mHandler.removeMessages(MESSAGE_BLUETOOTH_SERVICE_CONNECTED);
             }

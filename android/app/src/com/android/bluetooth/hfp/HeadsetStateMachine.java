@@ -1665,6 +1665,21 @@ class HeadsetStateMachine extends StateMachine {
                     }
                     transitionTo(mConnected);
                 }
+                case STACK_EVENT -> {
+                    HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
+                    // SCO is still being set up: when SCO is managed by audio, handling a volume
+                    // change now would block on the AudioPolicyService lock (held by SCO patch
+                    // setup). Defer it so it is handled once we have left AudioConnecting
+                    // (AudioOn/Connected).
+                    if (event.type == HeadsetStackEvent.EVENT_TYPE_VOLUME_CHANGED
+                            && mDevice.equals(event.device)
+                            && mSystemInterface.isScoManagedByAudioEnabled()) {
+                        stateLogD("Deferring volume change while AudioConnecting: " + event);
+                        deferMessage(message);
+                        break;
+                    }
+                    return super.processMessage(message);
+                }
                 default -> {
                     return super.processMessage(message);
                 }
@@ -2216,6 +2231,7 @@ class HeadsetStateMachine extends StateMachine {
 
     @VisibleForTesting
     void processVolumeEvent(int volumeType, int volume) {
+        log("Enter processVolumeEvent " );
         // Only current active device can change SCO volume
         if (!mDevice.equals(mHeadsetService.getActiveDevice())) {
             Log.w(TAG, "processVolumeEvent, ignored because " + mDevice + " is not active");
@@ -2226,6 +2242,25 @@ class HeadsetStateMachine extends StateMachine {
             boolean showVolume = android.os.SystemProperties.getBoolean(HFP_VOLUME_CONTROL_ENABLED, true);
             int flag = showVolume && (mCurrentState == mAudioOn) ? AudioManager.FLAG_SHOW_UI : 0;
             flag |= FLAG_ABSOLUTE_VOLUME;
+
+            AudioManager am = mSystemInterface.getAudioManager();
+            if (am.getMode() == AudioManager.MODE_ASSISTANT_CONVERSATION) {
+                int assistantMax = am.getStreamMaxVolume(AudioManager.STREAM_ASSISTANT);
+                int assistantMin = am.getStreamMinVolume(AudioManager.STREAM_ASSISTANT);
+                int assistantVolume;
+                if (volume <= 0) {
+                    assistantVolume = assistantMin;
+                } else {
+                    assistantVolume = Math.round((volume / 15.0f) * assistantMax);
+                    assistantVolume = Math.max(assistantVolume, 1);
+                }
+                if (assistantVolume != am.getStreamVolume(AudioManager.STREAM_ASSISTANT)) {
+                    log("Setting assistant stream volume " + assistantVolume + " from HFP " + volume);
+                    am.setStreamVolume(AudioManager.STREAM_ASSISTANT, assistantVolume, flag);
+                }
+                return;
+            }
+
             int volStream =
                     android.media.audio.Flags.deprecateStreamBtSco()
                             ? AudioManager.STREAM_VOICE_CALL
@@ -2253,6 +2288,7 @@ class HeadsetStateMachine extends StateMachine {
         } else {
             Log.e(TAG, "Bad volume type: " + volumeType);
         }
+        log("exit processVolumeEvent " );
     }
 
     private void processCallStatesDelayed(HeadsetCallState callState)

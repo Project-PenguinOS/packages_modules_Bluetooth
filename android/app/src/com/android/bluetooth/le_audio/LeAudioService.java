@@ -3659,7 +3659,8 @@ public class LeAudioService extends ConnectableProfile {
                     updateBroadcastActiveDevice(null, mActiveBroadcastAudioDevice, true);
                 }
             }
-        } else {
+        } else if (context_type == BluetoothLeAudio.CONTEXT_TYPE_MEDIA
+                || context_type == BluetoothLeAudio.CONTEXT_TYPE_SOUND_EFFECTS) {
             if (isBroadcastActive()) {
                 BluetoothDevice device =
                     getAdapterService().getDeviceFromByte(
@@ -5200,6 +5201,13 @@ public class LeAudioService extends ConnectableProfile {
             return;
         }
         if (getActiveGroupId() != LE_AUDIO_GROUP_ID_INVALID) {
+            if (Utils.isDualModeAudioEnabled() &&
+                    getGroupId(hfpHandoverDevice) == getActiveGroupId()) {
+                Log.i(TAG, "setInactiveForHfpHandover: Skip LE Audio deactivation,"
+                        + "as dual mode is enabled" + " hfpDevice=" + hfpHandoverDevice
+                        + " activeGroupId=" + getActiveGroupId());
+                return;
+            }
             mHfpHandoverDevice = hfpHandoverDevice;
             // record the lead device
             mLeAudioDeviceInactivatedForHfpHandover = mExposedActiveDevice;
@@ -5255,7 +5263,7 @@ public class LeAudioService extends ConnectableProfile {
                 return;
             }
             Log.d(TAG, "setInactiveForBroadcast: stop broadcast now");
-            updateFallbackUnicastGroupIdForBroadcast(LE_AUDIO_GROUP_ID_INVALID);
+            removeActiveDevice(true);
             stopBroadcast(broadcastId.get());
             suspendLeAudioStream();
             Log.d(TAG, "Wait for broadcast to stop");

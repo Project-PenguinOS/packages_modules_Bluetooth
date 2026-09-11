@@ -382,7 +382,7 @@ constexpr uint8_t kLeAudioMetadataHeadtrackerTransportLeAcl = 1;
 constexpr uint8_t kLeAudioMetadataHeadtrackerTransportLeIso = 2;
 
 /* Android Headtracker config parameters */
-constexpr uint32_t kLeAudioHeadtrackerSduItv = 20000;
+constexpr uint32_t kLeAudioHeadtrackerSduInterval = 20000;
 constexpr uint16_t kLeAudioHeadtrackerMaxTransLat = 20;
 constexpr uint16_t kLeAudioHeadtrackerMaxSduSize = 13;
 constexpr uint8_t kLeAudioHeadtrackerRtn = 2;
@@ -1179,6 +1179,22 @@ constexpr LeAudioCodecId kLeAudioCodecHeadtracking = {kLeAudioCodingFormatVendor
                                                       kLeAudioVendorCompanyIdGoogle,
                                                       kLeAudioVendorCodecIdHeadtracking};
 
+struct CigQosConfig {
+  uint32_t sdu_interval_c_to_p;
+  uint32_t sdu_interval_p_to_c;
+  uint16_t max_trans_lat_c_to_p;
+  uint16_t max_trans_lat_p_to_c;
+  uint8_t packing;
+  uint8_t framing;
+  uint8_t sca;
+  uint8_t phy_c_to_p;
+  uint8_t phy_p_to_c;
+  uint16_t max_sdu_size_c_to_p;
+  uint16_t max_sdu_size_p_to_c;
+  uint8_t rtn_c_to_p;
+  uint8_t rtn_p_to_c;
+};
+
 struct IsoDataPathConfiguration {
   types::LeAudioCodecId codecId = {0, 0, 0};
   bool isTransparent = true;
@@ -1602,6 +1618,7 @@ struct stream_parameters {
   uint8_t num_of_channels;
   int num_of_devices;
   void clear() {
+    audio_channel_allocation = 0;
     num_of_channels = 0;
     num_of_devices = 0;
     stream_config.clear();

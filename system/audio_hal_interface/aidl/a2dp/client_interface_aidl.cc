@@ -202,10 +202,11 @@ void BluetoothAudioClientInterface::FetchAudioProvider() {
     }
   }
 
-  log::assert_that(provider_factory_ != nullptr,
-                   "IBluetoothAudioProvidersFactory::openProvider({}) failed {} times",
-                   toString(transport_->GetSessionType()), kFetchAudioProviderRetryNumber);
-  log::assert_that(provider_ != nullptr, "assert failed: provider_ != nullptr");
+  if (provider_factory_ == nullptr || provider_ == nullptr) {
+    log::error("IBluetoothAudioProvidersFactory::openProvider({}) failed {} times, giving up",
+               toString(transport_->GetSessionType()), kFetchAudioProviderRetryNumber);
+    return;
+  }
 
   binder_status_t binder_status =
           AIBinder_linkToDeath(provider_factory_->asBinder().get(), death_recipient_.get(), this);
@@ -357,6 +358,10 @@ int BluetoothAudioClientInterface::StartSession() {
     if (aidl_retval.getExceptionCode() == EX_ILLEGAL_ARGUMENT) {
       log::error("BluetoothAudioHal Error: {}, audioConfig={}", aidl_retval.getDescription(),
                  transport_->GetAudioConfiguration().toString());
+    } else if (aidl_retval.getExceptionCode() == EX_TRANSACTION_FAILED) {
+      /* HAL binder died — transient, RenewAudioProviderAndSession will reconnect. */
+      log::error("BluetoothAudioHal StartSession failed (binder died): {}",
+                 aidl_retval.getDescription());
     } else {
       log::fatal("BluetoothAudioHal failure: {}", aidl_retval.getDescription());
     }
